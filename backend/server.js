@@ -394,6 +394,11 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
           
           // Get public base URL for recording links
           const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || 'http://localhost:5000';
+          console.log('=== URL GENERATION DEBUG ===');
+          console.log('publicBase:', publicBase);
+          console.log('playableFilename:', playableFilename);
+          console.log('============================');
+          
           if (publicBase && playableFilename) {
             const baseUrl = publicBase.startsWith('http') ? publicBase : `https://${publicBase}`;
             recordingUrl = `${baseUrl.replace(/\/$/, '')}/api/audio/${playableFilename}`;
@@ -495,6 +500,10 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
       }));
     }
 
+    console.log('=== FINAL RESPONSE DEBUG ===');
+    console.log('recordingUrl being sent:', recordingUrl);
+    console.log('============================');
+    
     res.json({ 
       success: true, 
       message: 'SOS sent successfully!',
