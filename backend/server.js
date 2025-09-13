@@ -28,24 +28,51 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('VERCEL_URL:', process.env.VERCEL_URL);
 console.log('================================');
 
-if (mongoUri) {
-  mongoose.connect(mongoUri, { 
+// Connection state tracking
+let isConnecting = false;
+let connectionPromise = null;
+
+// Robust MongoDB connection function
+async function ensureMongoConnection() {
+  if (mongoose.connection.readyState === 1) {
+    return true; // Already connected
+  }
+  
+  if (isConnecting && connectionPromise) {
+    return connectionPromise; // Return existing connection promise
+  }
+  
+  isConnecting = true;
+  connectionPromise = mongoose.connect(mongoUri, { 
     dbName: dbName,
-    serverSelectionTimeoutMS: 30000, // 30 seconds timeout for Vercel
-    connectTimeoutMS: 30000,
-    socketTimeoutMS: 30000,
-    maxPoolSize: 10,
+    serverSelectionTimeoutMS: 10000, // Reduced timeout for faster response
+    connectTimeoutMS: 10000,
+    socketTimeoutMS: 10000,
+    maxPoolSize: 5, // Reduced pool size for serverless
     retryWrites: true,
-    w: 'majority'
+    w: 'majority',
+    bufferCommands: false, // Disable mongoose buffering
+    bufferMaxEntries: 0 // Disable mongoose buffering
   }).then(() => {
     console.log(`✅ Connected to MongoDB database: ${dbName}`);
     useInMemory = false;
+    isConnecting = false;
+    return true;
   }).catch((error) => {
     console.warn('MongoDB connection failed, using in-memory storage:', error.message);
     console.warn('Error details:', error);
     console.warn('MongoDB URI used:', mongoUri.replace(/\/\/.*@/, '//***:***@')); // Hide credentials in logs
     useInMemory = true;
+    isConnecting = false;
+    return false;
   });
+  
+  return connectionPromise;
+}
+
+// Initialize connection
+if (mongoUri) {
+  ensureMongoConnection();
 } else {
   console.warn('MONGO_URI not set, using in-memory storage');
   useInMemory = true;
@@ -102,21 +129,12 @@ const upload = multer({
 // Serve audio files from MongoDB GridFS
 app.get('/api/audio/:filename', async (req, res) => {
   try {
-    // Check and reconnect to MongoDB if needed
-    if (mongoose.connection.readyState !== 1) {
-      console.log('MongoDB not connected, attempting to reconnect...');
-      try {
-        const mongoUri = process.env.MONGO_URI || 'mongodb+srv://bhuvnesh:bhuvi@cluster0.nm7zbfj.mongodb.net/sos_app';
-        await mongoose.connect(mongoUri, { 
-          dbName: 'sos_app',
-          serverSelectionTimeoutMS: 10000,
-          connectTimeoutMS: 10000
-        });
-        console.log('MongoDB reconnected successfully');
-      } catch (reconnectError) {
-        console.error('Failed to reconnect to MongoDB:', reconnectError);
-        return res.status(503).json({ error: 'Database connection failed' });
-      }
+    // Ensure MongoDB connection
+    const mongoConnected = await ensureMongoConnection();
+    
+    if (!mongoConnected) {
+      console.error('MongoDB connection failed, cannot serve audio');
+      return res.status(503).json({ error: 'Database connection failed' });
     }
     
     const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
@@ -315,7 +333,10 @@ app.post('/api/add-contact', async (req, res) => {
 
     console.log('Adding contact:', { name, phone, useInMemory, mongoReady: mongoose.connection.readyState });
 
-    if (useInMemory || !mongoose.connection.readyState) {
+    // Ensure MongoDB connection
+    const mongoConnected = await ensureMongoConnection();
+    
+    if (useInMemory || !mongoConnected) {
       // Use in-memory storage
       const newContact = { _id: Date.now().toString(), name, phone };
       inMemoryContacts.push(newContact);
@@ -340,7 +361,10 @@ app.post('/api/add-contact', async (req, res) => {
 // Get all contacts
 app.get('/api/contacts', async (req, res) => {
   try {
-    if (useInMemory || !mongoose.connection.readyState) {
+    // Ensure MongoDB connection
+    const mongoConnected = await ensureMongoConnection();
+    
+    if (useInMemory || !mongoConnected) {
       // Use in-memory storage
       res.json({ success: true, contacts: inMemoryContacts });
     } else {
@@ -436,8 +460,10 @@ app.post('/api/sos', (req, res, next) => {
         console.log('File size:', req.file.size);
         console.log('============================');
         
-        // Store directly in MongoDB GridFS without conversion
-        if (mongoose.connection.readyState === 1) {
+        // Ensure MongoDB connection before storing
+        const mongoConnected = await ensureMongoConnection();
+        
+        if (mongoConnected && mongoose.connection.readyState === 1) {
           const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
             bucketName: 'recordings'
           });
@@ -626,8 +652,10 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
         console.log('File size:', req.file.size);
         console.log('==============================');
         
-        // Store directly in MongoDB GridFS without conversion
-        if (mongoose.connection.readyState === 1) {
+        // Ensure MongoDB connection before storing
+        const mongoConnected = await ensureMongoConnection();
+        
+        if (mongoConnected && mongoose.connection.readyState === 1) {
           const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
             bucketName: 'recordings'
           });
