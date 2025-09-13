@@ -1,0 +1,19 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="#ff4757" stroke="#fff" stroke-width="32"/>
+  
+  <!-- Emergency cross -->
+  <rect x="200" y="120" width="112" height="40" rx="20" fill="#fff"/>
+  <rect x="200" y="200" width="112" height="40" rx="20" fill="#fff"/>
+  <rect x="200" y="280" width="112" height="40" rx="20" fill="#fff"/>
+  <rect x="200" y="360" width="112" height="40" rx="20" fill="#fff"/>
+  
+  <!-- Horizontal bar -->
+  <rect x="120" y="200" width="40" height="112" rx="20" fill="#fff"/>
+  <rect x="200" y="200" width="40" height="112" rx="20" fill="#fff"/>
+  <rect x="280" y="200" width="40" height="112" rx="20" fill="#fff"/>
+  <rect x="360" y="200" width="40" height="112" rx="20" fill="#fff"/>
+  
+  <!-- SOS text -->
+  <text x="256" y="450" font-family="Arial, sans-serif" font-size="48" font-weight="bold" text-anchor="middle" fill="#fff">SOS</text>
+</svg>
