@@ -64,7 +64,7 @@ function App() {
   };
 
   // Get API base URL from environment or use localhost for development
-  const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+  const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://your-backend-url.railway.app' : 'http://localhost:5000');
 
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type });
