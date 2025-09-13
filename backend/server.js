@@ -82,26 +82,52 @@ if (hasValidTwilio) {
 } else {
   console.warn('Twilio disabled: missing or invalid credentials. SMS/calls will be skipped.');
 }
-// Configure multer to save files to local storage (simpler approach)
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'recording-' + uniqueSuffix + '.webm');
+// Configure multer to use memory storage for Vercel compatibility
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
   }
 });
 
-const upload = multer({ storage: storage });
 
-
-// Serve static files from uploads directory (fallback)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve audio files from MongoDB GridFS
+app.get('/api/audio/:filename', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+    
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+      bucketName: 'recordings'
+    });
+    
+    const filename = req.params.filename;
+    const downloadStream = bucket.openDownloadStreamByName(filename);
+    
+    downloadStream.on('error', (error) => {
+      console.error('Error downloading file:', error);
+      res.status(404).json({ error: 'File not found' });
+    });
+    
+    downloadStream.on('data', (chunk) => {
+      res.write(chunk);
+    });
+    
+    downloadStream.on('end', () => {
+      res.end();
+    });
+    
+    // Set appropriate headers
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    
+  } catch (error) {
+    console.error('Error serving audio file:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -299,30 +325,53 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
     
     if (req.file) {
       try {
-        const inputPath = req.file.path;
-        const outputPath = inputPath.replace('.webm', '.mp3');
+        // Generate unique filename
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const filename = `recording-${uniqueSuffix}.mp3`;
         
-        // Convert WebM to MP3
-        await new Promise((resolve, reject) => {
-          ffmpeg(inputPath)
+        // Convert WebM to MP3 from memory buffer
+        const outputBuffer = await new Promise((resolve, reject) => {
+          const chunks = [];
+          ffmpeg()
+            .input(req.file.buffer)
             .toFormat('mp3')
+            .on('data', (chunk) => chunks.push(chunk))
             .on('end', () => {
               console.log('Audio conversion completed');
-              resolve();
+              resolve(Buffer.concat(chunks));
             })
             .on('error', (err) => {
               console.error('Audio conversion error:', err);
               reject(err);
             })
-            .save(outputPath);
+            .run();
         });
         
-        playableFilename = path.basename(outputPath);
-        console.log('Audio converted to:', playableFilename);
-        
-        // Get public base URL for recording links
-        const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL;
-        recordingUrl = publicBase && playableFilename ? `https://${publicBase.replace(/\/$/, '')}/api/uploads/${playableFilename}` : null;
+        // Store in MongoDB GridFS
+        if (mongoose.connection.readyState === 1) {
+          const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+            bucketName: 'recordings'
+          });
+          
+          const uploadStream = bucket.openUploadStream(filename, {
+            metadata: {
+              originalName: req.file.originalname,
+              mimetype: req.file.mimetype,
+              uploadedAt: new Date()
+            }
+          });
+          
+          uploadStream.end(outputBuffer);
+          
+          playableFilename = filename;
+          console.log('Audio stored in MongoDB:', playableFilename);
+          
+          // Get public base URL for recording links
+          const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL;
+          recordingUrl = publicBase && playableFilename ? `${publicBase.replace(/\/$/, '')}/api/audio/${playableFilename}` : null;
+        } else {
+          console.warn('MongoDB not connected, audio not stored');
+        }
       } catch (err) {
         console.error('Audio processing error:', err);
       }
@@ -429,30 +478,53 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
     
     if (req.file) {
       try {
-        const inputPath = req.file.path;
-        const outputPath = inputPath.replace('.webm', '.mp3');
+        // Generate unique filename
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const filename = `recording-${uniqueSuffix}.mp3`;
         
-        // Convert WebM to MP3
-        await new Promise((resolve, reject) => {
-          ffmpeg(inputPath)
+        // Convert WebM to MP3 from memory buffer
+        const outputBuffer = await new Promise((resolve, reject) => {
+          const chunks = [];
+          ffmpeg()
+            .input(req.file.buffer)
             .toFormat('mp3')
+            .on('data', (chunk) => chunks.push(chunk))
             .on('end', () => {
               console.log('Delayed audio conversion completed');
-              resolve();
+              resolve(Buffer.concat(chunks));
             })
             .on('error', (err) => {
               console.error('Delayed audio conversion error:', err);
               reject(err);
             })
-            .save(outputPath);
+            .run();
         });
         
-        playableFilename = path.basename(outputPath);
-        console.log('Delayed audio converted to:', playableFilename);
-        
-        // Get public base URL for recording links
-        const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL;
-        recordingUrl = publicBase && playableFilename ? `https://${publicBase.replace(/\/$/, '')}/api/uploads/${playableFilename}` : null;
+        // Store in MongoDB GridFS
+        if (mongoose.connection.readyState === 1) {
+          const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+            bucketName: 'recordings'
+          });
+          
+          const uploadStream = bucket.openUploadStream(filename, {
+            metadata: {
+              originalName: req.file.originalname,
+              mimetype: req.file.mimetype,
+              uploadedAt: new Date()
+            }
+          });
+          
+          uploadStream.end(outputBuffer);
+          
+          playableFilename = filename;
+          console.log('Delayed audio stored in MongoDB:', playableFilename);
+          
+          // Get public base URL for recording links
+          const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL;
+          recordingUrl = publicBase && playableFilename ? `${publicBase.replace(/\/$/, '')}/api/audio/${playableFilename}` : null;
+        } else {
+          console.warn('MongoDB not connected, delayed audio not stored');
+        }
       } catch (err) {
         console.error('Delayed audio processing error:', err);
       }
