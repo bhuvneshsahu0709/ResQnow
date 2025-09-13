@@ -6,12 +6,12 @@ const mongoose = require('mongoose');
 const twilio = require('twilio');
 const multer = require('multer');
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpegStatic = require('ffmpeg-static');
+const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const path = require('path');
 const fs = require('fs');
 
 // Set ffmpeg path
-ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const app = express();
 app.use(cors());
