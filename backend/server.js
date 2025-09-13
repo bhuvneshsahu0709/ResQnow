@@ -461,9 +461,11 @@ app.post('/api/sos', (req, res, next) => {
           console.log('Audio stored in MongoDB:', playableFilename);
           
           // Get public base URL for recording links
-          const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || 'http://localhost:5000';
+          const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || 'https://res-q-now-sos.vercel.app';
           console.log('=== URL GENERATION DEBUG ===');
-          console.log('publicBase:', publicBase);
+          console.log('process.env.PUBLIC_BASE_URL:', process.env.PUBLIC_BASE_URL);
+          console.log('process.env.VERCEL_URL:', process.env.VERCEL_URL);
+          console.log('Using publicBase:', publicBase);
           console.log('playableFilename:', playableFilename);
           console.log('============================');
           
@@ -649,7 +651,7 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
           console.log('Delayed audio stored in MongoDB:', playableFilename);
           
           // Get public base URL for recording links
-          const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || 'http://localhost:5000';
+          const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || 'https://res-q-now-sos.vercel.app';
           if (publicBase && playableFilename) {
             const baseUrl = publicBase.startsWith('http') ? publicBase : `https://${publicBase}`;
             recordingUrl = `${baseUrl.replace(/\/$/, '')}/api/audio/${playableFilename}`;
