@@ -134,6 +134,25 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
+// Debug endpoint to check Twilio configuration
+app.get('/api/debug/twilio', (req, res) => {
+  const debug = {
+    twilioClientAvailable: !!client,
+    hasValidTwilio,
+    environmentVariables: {
+      TWILIO_SID: process.env.TWILIO_SID ? 'Set (length: ' + process.env.TWILIO_SID.length + ')' : 'Not set',
+      TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN ? 'Set (length: ' + process.env.TWILIO_AUTH_TOKEN.length + ')' : 'Not set',
+      TWILIO_PHONE: process.env.TWILIO_PHONE || 'Not set',
+      PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL || 'Not set',
+      VERCEL_URL: process.env.VERCEL_URL || 'Not set'
+    },
+    contactsCount: inMemoryContacts.length,
+    mongoConnected: mongoose.connection.readyState === 1
+  };
+  
+  res.json(debug);
+});
+
 // Debug endpoint to check MongoDB connection status
 app.get('/api/debug', (req, res) => {
   const debugInfo = {
@@ -385,12 +404,23 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
     const smsResults = [];
     const callResults = [];
 
+    console.log('=== SOS DEBUG INFO ===');
+    console.log('Twilio client available:', !!client);
+    console.log('Contacts count:', contacts.length);
+    console.log('Environment variables:');
+    console.log('- TWILIO_SID set:', !!process.env.TWILIO_SID);
+    console.log('- TWILIO_AUTH_TOKEN set:', !!process.env.TWILIO_AUTH_TOKEN);
+    console.log('- TWILIO_PHONE set:', !!process.env.TWILIO_PHONE);
+    console.log('- TWILIO_PHONE value:', process.env.TWILIO_PHONE);
+    console.log('======================');
+
     if (client && contacts.length > 0) {
       const fromNumber = process.env.TWILIO_PHONE;
       
       // Send SMS to all contacts
       await Promise.all(contacts.map(async contact => {
         try {
+          console.log(`Attempting to send SMS to: ${contact.phone}`);
           const isIndia = typeof contact.phone === 'string' && contact.phone.startsWith('+91');
           
           if (isIndia) {
@@ -400,6 +430,7 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
               from: fromNumber,
               to: contact.phone
             });
+            console.log(`SMS sent successfully to ${contact.phone}, SID: ${resp.sid}`);
             smsResults.push({ to: contact.phone, sid: resp.sid, status: 'queued', type: 'plain' });
           } else {
             // Non-India: send full message
@@ -408,9 +439,11 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
               from: fromNumber,
               to: contact.phone
             });
+            console.log(`SMS sent successfully to ${contact.phone}, SID: ${resp.sid}`);
             smsResults.push({ to: contact.phone, sid: resp.sid, status: 'queued', type: 'full' });
           }
         } catch (err) {
+          console.error(`SMS failed for ${contact.phone}:`, err.message, err.code);
           smsResults.push({ to: contact.phone, error: err.message, code: err.code });
         }
       }));
@@ -418,6 +451,7 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
       // Make calls to all contacts
       await Promise.all(contacts.map(async contact => {
         try {
+          console.log(`Attempting to make call to: ${contact.phone}`);
           // Create TwiML for call
           let twimlUrl;
           if (recordingUrl) {
@@ -434,8 +468,10 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
             from: fromNumber
           });
           
+          console.log(`Call initiated successfully to ${contact.phone}, SID: ${call.sid}`);
           callResults.push({ to: contact.phone, sid: call.sid, status: 'in-progress' });
         } catch (err) {
+          console.error(`Call failed for ${contact.phone}:`, err.message, err.code);
           callResults.push({ to: contact.phone, error: err.message, code: err.code });
         }
       }));
