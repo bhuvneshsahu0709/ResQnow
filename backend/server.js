@@ -19,16 +19,26 @@ app.use(bodyParser.json());
 
 // MongoDB connection with proper database name
 const dbName = process.env.MONGO_DB_NAME || 'sos_app';
-const mongoUri = process.env.MONGO_URI;
+const mongoUri = process.env.MONGO_URI || 'mongodb+srv://bhuvnesh:bhuvi@cluster0.nm7zbfj.mongodb.net/sos_app';
+
+console.log('=== MongoDB Connection Debug ===');
+console.log('MONGO_URI set:', !!process.env.MONGO_URI);
+console.log('MONGO_DB_NAME:', process.env.MONGO_DB_NAME);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('VERCEL_URL:', process.env.VERCEL_URL);
+console.log('================================');
 
 if (mongoUri) {
   mongoose.connect(mongoUri, { 
-    dbName: dbName
+    dbName: dbName,
+    serverSelectionTimeoutMS: 10000, // 10 seconds timeout
+    connectTimeoutMS: 10000
   }).then(() => {
-    console.log(`Connected to MongoDB database: ${dbName}`);
+    console.log(`✅ Connected to MongoDB database: ${dbName}`);
     useInMemory = false;
   }).catch((error) => {
     console.warn('MongoDB connection failed, using in-memory storage:', error.message);
+    console.warn('Error details:', error);
     useInMemory = true;
   });
 } else {
