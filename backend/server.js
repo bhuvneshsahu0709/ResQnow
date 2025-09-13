@@ -387,7 +387,14 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
           
           // Get public base URL for recording links
           const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL;
-          recordingUrl = publicBase && playableFilename ? `${publicBase.replace(/\/$/, '')}/api/audio/${playableFilename}` : null;
+          if (publicBase && playableFilename) {
+            const baseUrl = publicBase.startsWith('http') ? publicBase : `https://${publicBase}`;
+            recordingUrl = `${baseUrl.replace(/\/$/, '')}/api/audio/${playableFilename}`;
+            console.log('Generated recording URL:', recordingUrl);
+          } else {
+            console.warn('Cannot generate recording URL - missing publicBase or filename');
+            console.log('publicBase:', publicBase, 'playableFilename:', playableFilename);
+          }
         } else {
           console.warn('MongoDB not connected, audio not stored');
         }
@@ -396,9 +403,11 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
       }
     }
 
-    // Prepare SMS messages
-    const fullBody = `🚨 EMERGENCY SOS! ATTENTION NEEDED NOW 🚨\nLocation: https://www.google.com/maps?q=${lat},${lng}${recordingUrl ? `\nRecording: ${recordingUrl}` : ''}`;
-    const plainBody = `SOS ALERT EMERGENCY!!\nLocation: https://www.google.com/maps?q=${lat},${lng}\nRecording: ${recordingUrl || 'Not available'}`;
+    // Prepare SMS messages with improved location accuracy
+    const locationUrl = `https://www.google.com/maps?q=${lat},${lng}&z=18&t=h`;
+    const locationText = `Lat: ${lat}, Lng: ${lng}`;
+    const fullBody = `🚨 EMERGENCY SOS! ATTENTION NEEDED NOW 🚨\n📍 Location: ${locationText}\n🗺️ Map: ${locationUrl}${recordingUrl ? `\n🎵 Recording: ${recordingUrl}` : '\n🎵 Recording: Not available'}`;
+    const plainBody = `SOS ALERT EMERGENCY!!\nLocation: ${locationText}\nMap: ${locationUrl}\nRecording: ${recordingUrl || 'Not available'}`;
 
     // Send SMS and make calls
     const smsResults = [];
@@ -456,10 +465,10 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
           let twimlUrl;
           if (recordingUrl) {
             // Use recorded audio if available
-            twimlUrl = `http://twimlets.com/message?Message%5B0%5D=Emergency%20SOS%20alert.%20Please%20listen%20to%20the%20recording%20and%20check%20the%20location.%20Recording%20URL%3A%20${encodeURIComponent(recordingUrl)}`;
+            twimlUrl = `http://twimlets.com/message?Message%5B0%5D=Emergency%20SOS%20alert.%20Location%3A%20${lat}%20comma%20${lng}.%20Recording%20URL%3A%20${encodeURIComponent(recordingUrl)}.%20Map%3A%20${encodeURIComponent(locationUrl)}.%20Please%20respond%20immediately.`;
           } else {
             // Use text-to-speech
-            twimlUrl = `http://twimlets.com/message?Message%5B0%5D=Emergency%20SOS%20alert.%20Location%3A%20${lat}%20comma%20${lng}.%20Please%20respond%20immediately.`;
+            twimlUrl = `http://twimlets.com/message?Message%5B0%5D=Emergency%20SOS%20alert.%20Location%3A%20${lat}%20comma%20${lng}.%20Map%3A%20${encodeURIComponent(locationUrl)}.%20Please%20respond%20immediately.`;
           }
 
           const call = await client.calls.create({
@@ -557,7 +566,14 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
           
           // Get public base URL for recording links
           const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL;
-          recordingUrl = publicBase && playableFilename ? `${publicBase.replace(/\/$/, '')}/api/audio/${playableFilename}` : null;
+          if (publicBase && playableFilename) {
+            const baseUrl = publicBase.startsWith('http') ? publicBase : `https://${publicBase}`;
+            recordingUrl = `${baseUrl.replace(/\/$/, '')}/api/audio/${playableFilename}`;
+            console.log('Generated delayed recording URL:', recordingUrl);
+          } else {
+            console.warn('Cannot generate delayed recording URL - missing publicBase or filename');
+            console.log('publicBase:', publicBase, 'playableFilename:', playableFilename);
+          }
         } else {
           console.warn('MongoDB not connected, delayed audio not stored');
         }
@@ -566,9 +582,11 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
       }
     }
 
-    // Prepare delayed SMS messages
-    const delayedBody = `🚨 FOLLOW-UP EMERGENCY SOS! 🚨\nThis is a 5-minute follow-up message.\nLocation: https://www.google.com/maps?q=${lat},${lng}${recordingUrl ? `\nNew Recording: ${recordingUrl}` : ''}${originalRecordingUrl ? `\nOriginal Recording: ${originalRecordingUrl}` : ''}\n\nIf you haven't responded yet, please check on this person immediately!`;
-    const delayedPlainBody = `FOLLOW-UP SOS ALERT! 5-minute check-in.\nLocation: https://www.google.com/maps?q=${lat},${lng}\nRecording: ${recordingUrl || 'Not available'}\nPlease respond if you haven't already!`;
+    // Prepare delayed SMS messages with improved location accuracy
+    const delayedLocationUrl = `https://www.google.com/maps?q=${lat},${lng}&z=18&t=h`;
+    const delayedLocationText = `Lat: ${lat}, Lng: ${lng}`;
+    const delayedBody = `🚨 FOLLOW-UP EMERGENCY SOS! 🚨\nThis is a 5-minute follow-up message.\n📍 Location: ${delayedLocationText}\n🗺️ Map: ${delayedLocationUrl}${recordingUrl ? `\n🎵 New Recording: ${recordingUrl}` : '\n🎵 New Recording: Not available'}${originalRecordingUrl ? `\n🎵 Original Recording: ${originalRecordingUrl}` : ''}\n\nIf you haven't responded yet, please check on this person immediately!`;
+    const delayedPlainBody = `FOLLOW-UP SOS ALERT! 5-minute check-in.\nLocation: ${delayedLocationText}\nMap: ${delayedLocationUrl}\nRecording: ${recordingUrl || 'Not available'}\nPlease respond if you haven't already!`;
 
     // Send delayed SMS and make calls
     const smsResults = [];
@@ -611,10 +629,10 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
           let twimlUrl;
           if (recordingUrl) {
             // Use new recorded audio if available
-            twimlUrl = `http://twimlets.com/message?Message%5B0%5D=This%20is%20a%20follow-up%20emergency%20SOS%20alert%20after%205%20minutes.%20Please%20listen%20to%20the%20recording%20and%20check%20the%20location.%20Recording%20URL%3A%20${encodeURIComponent(recordingUrl)}`;
+            twimlUrl = `http://twimlets.com/message?Message%5B0%5D=Follow-up%20emergency%20SOS%20alert%20after%205%20minutes.%20Location%3A%20${lat}%20comma%20${lng}.%20Recording%20URL%3A%20${encodeURIComponent(recordingUrl)}.%20Map%3A%20${encodeURIComponent(delayedLocationUrl)}.%20Please%20respond%20immediately%20if%20you%20haven%27t%20already.`;
           } else {
             // Use text-to-speech for delayed message
-            twimlUrl = `http://twimlets.com/message?Message%5B0%5D=Follow-up%20emergency%20SOS%20alert%20after%205%20minutes.%20Location%3A%20${lat}%20comma%20${lng}.%20Please%20respond%20immediately%20if%20you%20haven%27t%20already.`;
+            twimlUrl = `http://twimlets.com/message?Message%5B0%5D=Follow-up%20emergency%20SOS%20alert%20after%205%20minutes.%20Location%3A%20${lat}%20comma%20${lng}.%20Map%3A%20${encodeURIComponent(delayedLocationUrl)}.%20Please%20respond%20immediately%20if%20you%20haven%27t%20already.`;
           }
 
           const call = await client.calls.create({
