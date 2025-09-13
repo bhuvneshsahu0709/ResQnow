@@ -353,6 +353,8 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
           const chunks = [];
           ffmpeg()
             .input(req.file.buffer)
+            .inputFormat('webm')
+            .audioCodec('libmp3lame')
             .toFormat('mp3')
             .on('data', (chunk) => chunks.push(chunk))
             .on('end', () => {
@@ -405,6 +407,8 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
         }
       } catch (err) {
         console.error('Audio processing error:', err);
+        console.log('Skipping audio processing due to conversion error');
+        // Continue without audio - the SOS will still work
       }
     }
 
@@ -537,6 +541,8 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
           const chunks = [];
           ffmpeg()
             .input(req.file.buffer)
+            .inputFormat('webm')
+            .audioCodec('libmp3lame')
             .toFormat('mp3')
             .on('data', (chunk) => chunks.push(chunk))
             .on('end', () => {
@@ -589,6 +595,8 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
         }
       } catch (err) {
         console.error('Delayed audio processing error:', err);
+        console.log('Skipping delayed audio processing due to conversion error');
+        // Continue without audio - the delayed SOS will still work
       }
     }
 
