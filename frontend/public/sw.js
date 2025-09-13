@@ -86,12 +86,14 @@ self.addEventListener('fetch', (event) => {
               return response;
             }
 
-            // Cache successful responses
-            const responseToCache = response.clone();
-            caches.open(DYNAMIC_CACHE)
-              .then((cache) => {
-                cache.put(request, responseToCache);
-              });
+            // Cache successful responses (only GET requests)
+            if (request.method === 'GET') {
+              const responseToCache = response.clone();
+              caches.open(DYNAMIC_CACHE)
+                .then((cache) => {
+                  cache.put(request, responseToCache);
+                });
+            }
 
             return response;
           })
@@ -111,8 +113,8 @@ async function handleApiRequest(request) {
     // Try network first for API requests
     const networkResponse = await fetch(request);
     
-    // Cache successful API responses
-    if (networkResponse.ok) {
+    // Cache successful API responses (only GET requests)
+    if (networkResponse.ok && request.method === 'GET') {
       const responseClone = networkResponse.clone();
       caches.open(DYNAMIC_CACHE)
         .then((cache) => {
