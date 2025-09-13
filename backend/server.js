@@ -26,6 +26,7 @@ if (mongoUri) {
     dbName: dbName
   }).then(() => {
     console.log(`Connected to MongoDB database: ${dbName}`);
+    useInMemory = false;
   }).catch((error) => {
     console.warn('MongoDB connection failed, using in-memory storage:', error.message);
     useInMemory = true;
@@ -99,21 +100,25 @@ app.post('/api/add-contact', async (req, res) => {
     const { name, phone } = req.body;
     if (!name || !phone) return res.status(400).json({ success: false, message: 'Name and phone required' });
 
+    console.log('Adding contact:', { name, phone, useInMemory, mongoReady: mongoose.connection.readyState });
+
     if (useInMemory || !mongoose.connection.readyState) {
       // Use in-memory storage
       const newContact = { _id: Date.now().toString(), name, phone };
       inMemoryContacts.push(newContact);
+      console.log('Contact added to in-memory storage:', newContact);
       res.json({ success: true, message: 'Contact added successfully!' });
     } else {
       // Use MongoDB
       const newContact = new Contact({ name, phone });
       await newContact.save();
+      console.log('Contact added to MongoDB:', newContact);
       res.json({ success: true, message: 'Contact added successfully!' });
     }
   } catch (err) {
     console.error('Database error, falling back to in-memory:', err.message);
     // Fallback to in-memory storage
-    const newContact = { _id: Date.now().toString(), name, phone };
+    const newContact = { _id: Date.now().toString(), name: req.body.name, phone: req.body.phone };
     inMemoryContacts.push(newContact);
     res.json({ success: true, message: 'Contact added successfully!' });
   }
@@ -216,8 +221,8 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
         console.log('Audio converted to:', playableFilename);
         
         // Get public base URL for recording links
-        const publicBase = process.env.PUBLIC_BASE_URL;
-        recordingUrl = publicBase && playableFilename ? `${publicBase.replace(/\/$/, '')}/uploads/${playableFilename}` : null;
+        const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL;
+        recordingUrl = publicBase && playableFilename ? `https://${publicBase.replace(/\/$/, '')}/api/uploads/${playableFilename}` : null;
       } catch (err) {
         console.error('Audio processing error:', err);
       }
@@ -346,8 +351,8 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
         console.log('Delayed audio converted to:', playableFilename);
         
         // Get public base URL for recording links
-        const publicBase = process.env.PUBLIC_BASE_URL;
-        recordingUrl = publicBase && playableFilename ? `${publicBase.replace(/\/$/, '')}/uploads/${playableFilename}` : null;
+        const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL;
+        recordingUrl = publicBase && playableFilename ? `https://${publicBase.replace(/\/$/, '')}/api/uploads/${playableFilename}` : null;
       } catch (err) {
         console.error('Delayed audio processing error:', err);
       }
