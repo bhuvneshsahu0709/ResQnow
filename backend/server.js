@@ -87,7 +87,14 @@ const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 25 * 1024 * 1024, // 25MB limit (increased)
+    fieldSize: 25 * 1024 * 1024, // 25MB field size
+    fieldNameSize: 100,
+    fieldValueSize: 25 * 1024 * 1024
+  },
+  fileFilter: (req, file, cb) => {
+    console.log('Multer file filter - file:', file);
+    cb(null, true); // Accept all files
   }
 });
 
@@ -382,7 +389,22 @@ app.delete('/api/contacts/:id', async (req, res) => {
 });
 
 // SOS endpoint
-app.post('/api/sos', upload.single('audio'), async (req, res) => {
+app.post('/api/sos', (req, res, next) => {
+  upload.single('audio')(req, res, (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      return res.status(400).json({ success: false, message: 'File upload error: ' + err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
+  console.log('=== SOS REQUEST DEBUG ===');
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('Content-Length:', req.headers['content-length']);
+  console.log('Body keys:', Object.keys(req.body));
+  console.log('Files:', req.files);
+  console.log('File:', req.file);
+  console.log('========================');
   try {
     const { lat, lng, messageType = 'immediate' } = req.body;
     
