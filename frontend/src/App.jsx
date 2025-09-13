@@ -294,12 +294,19 @@ function App() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       showNotification(`SOS #${sosAttempt} sent successfully!`, 'success');
+      console.log('=== FRONTEND RESPONSE DEBUG ===');
+      console.log('Full response:', res.data);
+      console.log('recordingUrl in response:', res.data.recordingUrl);
+      console.log('================================');
+      
       if (res.data && res.data.results) {
         console.log('Twilio Results:', res.data.results);
       }
       if (res.data.recordingUrl) {
         console.log('Recording URL:', res.data.recordingUrl);
         originalRecordingUrlRef.current = res.data.recordingUrl;
+      } else {
+        console.log('❌ NO RECORDING URL IN RESPONSE!');
       }
     } catch (err) { 
       console.error(err); 

@@ -422,6 +422,12 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
     const locationText = `Lat: ${lat}, Lng: ${lng}`;
     const fullBody = `🚨 EMERGENCY SOS! ATTENTION NEEDED NOW 🚨\n📍 Location: ${locationText}\n🗺️ Map: ${locationUrl}${recordingUrl ? `\n🎵 Recording: ${recordingUrl}` : '\n🎵 Recording: Not available'}`;
     const plainBody = `SOS ALERT EMERGENCY!!\nLocation: ${locationText}\nMap: ${locationUrl}\nRecording: ${recordingUrl || 'Not available'}`;
+    
+    console.log('=== SMS MESSAGE DEBUG ===');
+    console.log('recordingUrl for SMS:', recordingUrl);
+    console.log('fullBody:', fullBody);
+    console.log('plainBody:', plainBody);
+    console.log('=========================');
 
     // Send SMS and make calls
     const smsResults = [];
