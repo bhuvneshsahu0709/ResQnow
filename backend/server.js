@@ -380,13 +380,18 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
             }
           });
           
-          uploadStream.end(outputBuffer);
+          // Wait for upload to complete
+          await new Promise((resolve, reject) => {
+            uploadStream.on('finish', resolve);
+            uploadStream.on('error', reject);
+            uploadStream.end(outputBuffer);
+          });
           
           playableFilename = filename;
           console.log('Audio stored in MongoDB:', playableFilename);
           
           // Get public base URL for recording links
-          const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL;
+          const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || 'http://localhost:5000';
           if (publicBase && playableFilename) {
             const baseUrl = publicBase.startsWith('http') ? publicBase : `https://${publicBase}`;
             recordingUrl = `${baseUrl.replace(/\/$/, '')}/api/audio/${playableFilename}`;
@@ -559,13 +564,18 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
             }
           });
           
-          uploadStream.end(outputBuffer);
+          // Wait for upload to complete
+          await new Promise((resolve, reject) => {
+            uploadStream.on('finish', resolve);
+            uploadStream.on('error', reject);
+            uploadStream.end(outputBuffer);
+          });
           
           playableFilename = filename;
           console.log('Delayed audio stored in MongoDB:', playableFilename);
           
           // Get public base URL for recording links
-          const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL;
+          const publicBase = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || 'http://localhost:5000';
           if (publicBase && playableFilename) {
             const baseUrl = publicBase.startsWith('http') ? publicBase : `https://${publicBase}`;
             recordingUrl = `${baseUrl.replace(/\/$/, '')}/api/audio/${playableFilename}`;
