@@ -95,8 +95,21 @@ const upload = multer({
 // Serve audio files from MongoDB GridFS
 app.get('/api/audio/:filename', async (req, res) => {
   try {
+    // Check and reconnect to MongoDB if needed
     if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ error: 'Database not connected' });
+      console.log('MongoDB not connected, attempting to reconnect...');
+      try {
+        const mongoUri = process.env.MONGO_URI || 'mongodb+srv://bhuvnesh:bhuvi@cluster0.nm7zbfj.mongodb.net/sos_app';
+        await mongoose.connect(mongoUri, { 
+          dbName: 'sos_app',
+          serverSelectionTimeoutMS: 10000,
+          connectTimeoutMS: 10000
+        });
+        console.log('MongoDB reconnected successfully');
+      } catch (reconnectError) {
+        console.error('Failed to reconnect to MongoDB:', reconnectError);
+        return res.status(503).json({ error: 'Database connection failed' });
+      }
     }
     
     const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
@@ -104,11 +117,17 @@ app.get('/api/audio/:filename', async (req, res) => {
     });
     
     const filename = req.params.filename;
+    console.log('Attempting to serve audio file:', filename);
+    
     const downloadStream = bucket.openDownloadStreamByName(filename);
     
     downloadStream.on('error', (error) => {
       console.error('Error downloading file:', error);
-      res.status(404).json({ error: 'File not found' });
+      if (error.code === 'ENOENT') {
+        res.status(404).json({ error: 'Audio file not found' });
+      } else {
+        res.status(500).json({ error: 'Error retrieving audio file' });
+      }
     });
     
     downloadStream.on('data', (chunk) => {
@@ -116,6 +135,7 @@ app.get('/api/audio/:filename', async (req, res) => {
     });
     
     downloadStream.on('end', () => {
+      console.log('Audio file served successfully:', filename);
       res.end();
     });
     
@@ -133,7 +153,46 @@ app.get('/api/audio/:filename', async (req, res) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true });
+  res.json({ 
+    ok: true, 
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Audio health check
+app.get('/api/audio-health', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({ 
+        ok: false, 
+        mongodb: 'disconnected',
+        message: 'MongoDB not connected' 
+      });
+    }
+    
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+      bucketName: 'recordings'
+    });
+    
+    // Try to list files to test GridFS access
+    const files = await bucket.find({}).limit(1).toArray();
+    
+    res.json({ 
+      ok: true, 
+      mongodb: 'connected',
+      gridfs: 'accessible',
+      filesCount: files.length,
+      message: 'Audio service is healthy'
+    });
+  } catch (error) {
+    res.json({ 
+      ok: false, 
+      mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+      error: error.message,
+      message: 'Audio service has issues'
+    });
+  }
 });
 
 // Debug endpoint to check Twilio configuration
