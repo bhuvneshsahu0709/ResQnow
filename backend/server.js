@@ -31,14 +31,19 @@ console.log('================================');
 if (mongoUri) {
   mongoose.connect(mongoUri, { 
     dbName: dbName,
-    serverSelectionTimeoutMS: 10000, // 10 seconds timeout
-    connectTimeoutMS: 10000
+    serverSelectionTimeoutMS: 30000, // 30 seconds timeout for Vercel
+    connectTimeoutMS: 30000,
+    socketTimeoutMS: 30000,
+    maxPoolSize: 10,
+    retryWrites: true,
+    w: 'majority'
   }).then(() => {
     console.log(`✅ Connected to MongoDB database: ${dbName}`);
     useInMemory = false;
   }).catch((error) => {
     console.warn('MongoDB connection failed, using in-memory storage:', error.message);
     console.warn('Error details:', error);
+    console.warn('MongoDB URI used:', mongoUri.replace(/\/\/.*@/, '//***:***@')); // Hide credentials in logs
     useInMemory = true;
   });
 } else {
@@ -101,6 +106,91 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
+});
+
+// Debug endpoint to check MongoDB connection status
+app.get('/api/debug', (req, res) => {
+  const debugInfo = {
+    timestamp: new Date().toISOString(),
+    environment: {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL_URL: process.env.VERCEL_URL,
+      MONGO_URI_SET: !!process.env.MONGO_URI,
+      MONGO_DB_NAME: process.env.MONGO_DB_NAME,
+      PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL
+    },
+    mongodb: {
+      connectionState: mongoose.connection.readyState,
+      connectionStateText: getConnectionStateText(mongoose.connection.readyState),
+      useInMemory: useInMemory,
+      host: mongoose.connection.host,
+      port: mongoose.connection.port,
+      name: mongoose.connection.name
+    },
+    memoryContacts: {
+      count: inMemoryContacts.length,
+      contacts: inMemoryContacts
+    }
+  };
+  
+  res.json(debugInfo);
+});
+
+function getConnectionStateText(state) {
+  const states = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  return states[state] || 'unknown';
+}
+
+// Test MongoDB connection endpoint
+app.get('/api/test-mongodb', async (req, res) => {
+  try {
+    console.log('Testing MongoDB connection...');
+    
+    if (mongoose.connection.readyState === 1) {
+      // Already connected, test with a simple query
+      const testDoc = new Contact({ name: 'Test', phone: '+1234567890' });
+      await testDoc.save();
+      await Contact.deleteOne({ _id: testDoc._id });
+      
+      res.json({
+        success: true,
+        message: 'MongoDB connection is working!',
+        connectionState: mongoose.connection.readyState,
+        useInMemory: useInMemory
+      });
+    } else {
+      // Try to connect
+      const mongoUri = process.env.MONGO_URI || 'mongodb+srv://bhuvnesh:bhuvi@cluster0.nm7zbfj.mongodb.net/sos_app';
+      
+      await mongoose.connect(mongoUri, {
+        dbName: 'sos_app',
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000
+      });
+      
+      res.json({
+        success: true,
+        message: 'MongoDB connection established!',
+        connectionState: mongoose.connection.readyState,
+        useInMemory: false
+      });
+    }
+  } catch (error) {
+    console.error('MongoDB test failed:', error);
+    res.json({
+      success: false,
+      message: 'MongoDB connection failed',
+      error: error.message,
+      errorCode: error.code,
+      connectionState: mongoose.connection.readyState,
+      useInMemory: useInMemory
+    });
+  }
 });
 
 
