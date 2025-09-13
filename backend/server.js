@@ -119,9 +119,11 @@ app.get('/api/audio/:filename', async (req, res) => {
       res.end();
     });
     
-    // Set appropriate headers
-    res.setHeader('Content-Type', 'audio/mpeg');
+    // Set appropriate headers based on file type
+    const isWebM = filename.endsWith('.webm');
+    res.setHeader('Content-Type', isWebM ? 'audio/webm' : 'audio/mpeg');
     res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.setHeader('Access-Control-Allow-Origin', '*');
     
   } catch (error) {
     console.error('Error serving audio file:', error);
@@ -346,29 +348,14 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
       try {
         // Generate unique filename
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const filename = `recording-${uniqueSuffix}.mp3`;
+        const filename = `recording-${uniqueSuffix}.webm`;
         
-        // Convert WebM to MP3 from memory buffer
-        const outputBuffer = await new Promise((resolve, reject) => {
-          const chunks = [];
-          ffmpeg()
-            .input(req.file.buffer)
-            .inputFormat('webm')
-            .audioCodec('libmp3lame')
-            .toFormat('mp3')
-            .on('data', (chunk) => chunks.push(chunk))
-            .on('end', () => {
-              console.log('Audio conversion completed');
-              resolve(Buffer.concat(chunks));
-            })
-            .on('error', (err) => {
-              console.error('Audio conversion error:', err);
-              reject(err);
-            })
-            .run();
-        });
+        console.log('=== SIMPLE AUDIO STORAGE ===');
+        console.log('Storing audio directly as WebM:', filename);
+        console.log('File size:', req.file.size);
+        console.log('============================');
         
-        // Store in MongoDB GridFS
+        // Store directly in MongoDB GridFS without conversion
         if (mongoose.connection.readyState === 1) {
           const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
             bucketName: 'recordings'
@@ -386,7 +373,7 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
           await new Promise((resolve, reject) => {
             uploadStream.on('finish', resolve);
             uploadStream.on('error', reject);
-            uploadStream.end(outputBuffer);
+            uploadStream.end(req.file.buffer);
           });
           
           playableFilename = filename;
@@ -412,7 +399,7 @@ app.post('/api/sos', upload.single('audio'), async (req, res) => {
         }
       } catch (err) {
         console.error('Audio processing error:', err);
-        console.log('Skipping audio processing due to conversion error');
+        console.log('Skipping audio processing due to storage error');
         // Continue without audio - the SOS will still work
       }
     }
@@ -549,29 +536,14 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
       try {
         // Generate unique filename
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const filename = `recording-${uniqueSuffix}.mp3`;
+        const filename = `recording-${uniqueSuffix}.webm`;
         
-        // Convert WebM to MP3 from memory buffer
-        const outputBuffer = await new Promise((resolve, reject) => {
-          const chunks = [];
-          ffmpeg()
-            .input(req.file.buffer)
-            .inputFormat('webm')
-            .audioCodec('libmp3lame')
-            .toFormat('mp3')
-            .on('data', (chunk) => chunks.push(chunk))
-            .on('end', () => {
-              console.log('Delayed audio conversion completed');
-              resolve(Buffer.concat(chunks));
-            })
-            .on('error', (err) => {
-              console.error('Delayed audio conversion error:', err);
-              reject(err);
-            })
-            .run();
-        });
+        console.log('=== DELAYED AUDIO STORAGE ===');
+        console.log('Storing delayed audio directly as WebM:', filename);
+        console.log('File size:', req.file.size);
+        console.log('==============================');
         
-        // Store in MongoDB GridFS
+        // Store directly in MongoDB GridFS without conversion
         if (mongoose.connection.readyState === 1) {
           const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
             bucketName: 'recordings'
@@ -589,7 +561,7 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
           await new Promise((resolve, reject) => {
             uploadStream.on('finish', resolve);
             uploadStream.on('error', reject);
-            uploadStream.end(outputBuffer);
+            uploadStream.end(req.file.buffer);
           });
           
           playableFilename = filename;
@@ -610,7 +582,7 @@ app.post('/api/sos-delayed', upload.single('audio'), async (req, res) => {
         }
       } catch (err) {
         console.error('Delayed audio processing error:', err);
-        console.log('Skipping delayed audio processing due to conversion error');
+        console.log('Skipping delayed audio processing due to storage error');
         // Continue without audio - the delayed SOS will still work
       }
     }
